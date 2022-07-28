@@ -87,14 +87,13 @@ jobs:
       run: |
         kernel_ver=$(curl -s https://www.kernel.org/ | grep ' <a href="https://cdn.kernel.org/pub/linux/kernel/' | head -n 1 | awk -F '[>]' '{print $2}' | awk -F '[<]' '{print $1}')
         cd linux-$kernel_ver
-        cp $GITHUB_WORKSPACE/amd64/config-5.18.y-bbrplus .cofig -v
+        cp $GITHUB_WORKSPACE/amd64/config-5.18.y-bbrplus .config -v
         cp $GITHUB_WORKSPACE/convert_official_linux-5.18.x_src_to_bbrplus.patch convert_official_linux-5.18.x_src_to_bbrplus.patch -v
         patch -p1 < convert_official_linux-5.18.x_src_to_bbrplus.patch
         scripts/config --disable SECURITY_LOCKDOWN_LSM
         scripts/config --disable DEBUG_INFO
         scripts/config --disable MODULE_SIG
         echo -e "$(nproc) thread compile"
-        make defconfig
         sudo time make -j$(nproc) deb-pkg 2>&1 | tee build.log
         cd /workdir && mv *.deb /workdir/upload
         echo "::set-output name=status::success"
