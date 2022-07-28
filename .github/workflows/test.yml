@@ -1,0 +1,179 @@
+#
+# This is free software, licensed under the MIT License.
+# See /LICENSE for more information.
+#
+# Description: Build Kernel using GitHub Actions
+# Change from P3TERX
+#
+
+name: ubuntu kernel test
+
+on:
+  repository_dispatch:
+  workflow_dispatch:
+    inputs:
+      ssh:
+        description: 'SSH connection to Actions'
+        required: false
+        default: 'false'
+      set_kernel:
+        description: "KERNEL: 5.4 / 5.10 / 5.15 / 5.18"
+        required: true
+        default: ""
+      set_number:
+        description: "NUMBER: 5.4.x / 5.10.x / 5.15.x / 5.18.x"
+        required: true
+        default: ""
+
+env:
+  UPLOAD_DIR: true
+  UPLOAD_RELEASE: false
+  UPLOAD_WETRANSFER: false
+  SERVERCHAN_SCKEY: true
+  KERNEL_URL : https://cdn.kernel.org/pub/linux/kernel/v5.x
+  TZ: Asia/Shanghai
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: docker.io/qctt/kernelbuild:ubuntu20.04
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@main
+
+    - name: Initialization environment
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        sudo -E sed -i~orig -e 's/# deb-src/deb-src/' /etc/apt/sources.list   
+        sudo -E apt-get -qq update
+        sudo -E apt-get -qq install build-essential libncurses5-dev bzip2 gawk gettext git patch unzip htop wget curl -y
+        sudo -E apt-get -qq build-dep linux -y
+        sudo -E apt-get -qq autoremove --purge
+        sudo -E apt-get -qq clean
+        sudo mkdir -p /workdir
+        sudo mkdir -p /workdir/upload
+        sudo chown $USER:$GROUPS /workdir
+        sudo chown $USER:$GROUPS /workdir/upload
+
+    - name: Get source code
+      id: code
+      working-directory: /workdir
+      run: |
+        df -hT $PWD
+        set_number="${{ github.event.inputs.set_number }}"
+        echo "KERNEL_NUMBER=${set_number}" >> $GITHUB_ENV
+        wget -N -O kernel.tar.xz ${KERNEL_URL}/linux-${KERNEL_NUMBER}.tar.xz
+        tar -Jxf kernel.tar.xz -C /workdir && cd /workdir/linux-$kernel_ver
+        echo "::set-output name=status::success"
+
+    - name: telegrame_bot
+      run: |
+        cat /proc/cpuinfo | grep name | cut -f2 -d: | uniq -c > CPU
+        cat /proc/cpuinfo | grep "cpu cores" | uniq >> CPU
+        sed -i 's|[[:space:]]||g; s|^.||' CPU && sed -i 's|CPU||g; s|pucores:||' CPU
+        CPUNAME="$(awk 'NR==1' CPU)" && CPUCORES="$(awk 'NR==2' CPU)"
+        rm -rf CPU
+        kernel_ver=$(curl -s https://www.kernel.org/ | grep ' <a href="https://cdn.kernel.org/pub/linux/kernel/' | head -n 1 | awk -F '[>]' '{print $2}' | awk -F '[<]' '{print $1}')
+        if [[ "${SERVERCHAN_SCKEY}" == "true" ]]; then
+          curl -k --data chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data "text=🎉 主人：
+          您正在使用 kissyouhunter 的 bbr 仓库 {CPU型号为 [ ${CPUNAME} ] 核心数 为 [ ${CPUCORES} ] 线程数为 [ $(nproc) ]的机器} 编译 ${{ github.event.inputs.set_number }} 内核,请耐心等待...... 😋" "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage"
+        fi
+
+    - name: SSH connection to Actions
+      uses: P3TERX/ssh2actions@v1.0.0
+      if: (github.event.inputs.ssh == 'true' && github.event.inputs.ssh  != 'false') || contains(github.event.action, 'ssh')
+      env:
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+
+    - name: Compile the kernel
+      id: compile
+      if: steps.code.outputs.status == 'success'
+      working-directory: /workdir
+      run: |
+        cd linux-${KERNEL_NUMBER}
+        set_kernel="${{ github.event.inputs.set_kernel }}"
+        if [ "$set_kernel" = "5.4" ]; then
+            cp $GITHUB_WORKSPACE/amd64/config-5.4.y-bbrplus .config -v
+            cp $GITHUB_WORKSPACE/convert_official_linux-5.4.x_src_to_bbrplus.patch convert_official_linux-5.4.x_src_to_bbrplus.patch -v
+            patch -p1 < convert_official_linux-5.14.x_src_to_bbrplus.patch
+            scripts/config --disable DEBUG_INFO && scripts/config --disable MODULE_SIG
+        elif [ "$set_kernel" = "5.10" ]; then
+            cp $GITHUB_WORKSPACE/amd64/config-5.10.y-bbrplus .config -v
+            cp $GITHUB_WORKSPACE/convert_official_linux-5.10.x_src_to_bbrplus.patch convert_official_linux-5.10.x_src_to_bbrplus.patch -v
+            patch -p1 < convert_official_linux-5.10.x_src_to_bbrplus.patch
+            scripts/config --disable DEBUG_INFO && scripts/config --disable MODULE_SIG
+        elif [ "$set_kernel" = "5.15" ]; then
+            cp $GITHUB_WORKSPACE/amd64/config-5.15.y-bbrplus .config -v
+            cp $GITHUB_WORKSPACE/convert_official_linux-5.15.x_src_to_bbrplus.patch convert_official_linux-5.15.x_src_to_bbrplus.patch -v
+            patch -p1 < convert_official_linux-5.15.x_src_to_bbrplus.patch
+            scripts/config --disable SECURITY_LOCKDOWN_LSM
+            scripts/config --disable DEBUG_INFO
+            scripts/config --disable MODULE_SIG
+        elif [ "$set_kernel" = "5.18" ]; then
+            cp $GITHUB_WORKSPACE/amd64/config-5.18.y-bbrplus .config -v
+            cp $GITHUB_WORKSPACE/convert_official_linux-5.18.x_src_to_bbrplus.patch convert_official_linux-5.18.x_src_to_bbrplus.patch -v
+            patch -p1 < convert_official_linux-5.18.x_src_to_bbrplus.patch
+            scripts/config --disable SECURITY_LOCKDOWN_LSM
+            scripts/config --disable DEBUG_INFO
+            scripts/config --disable MODULE_SIG
+        fi
+        echo -e "$(nproc) thread compile"
+        make -j$(nproc) deb-pkg 2>&1 | tee build.log
+        cd /workdir && mv *.deb /workdir/upload -v
+        set_kernel="${{ github.event.inputs.set_kernel }}"
+        if [ "$set_kernel" = "5.4" ]; then
+           mv /workdir/linux-$kernel_ver/.config //workdir/upload/config-5.4.y-bbrplus -v
+        elif [ "$set_kernel" = "5.10" ]; then
+            mv /workdir/linux-$kernel_ver/.config //workdir/upload/config-5.10.y-bbrplus -v
+        elif [ "$set_kernel" = "5.15" ]; then
+            mv /workdir/linux-$kernel_ver/.config //workdir/upload/config-5.15.y-bbrplus -v
+        elif [ "$set_kernel" = "5.18" ]; then
+            mv /workdir/linux-$kernel_ver/.config //workdir/upload/config-5.18.y-bbrplus -v
+        fi
+        echo "::set-output name=status::success"
+        echo "FILE_DATE=Kernel_Ubuntu_$kernel_ver_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV   
+
+    - name: Check space usage
+      if: (!cancelled()) && steps.compile.outputs.status == 'success'
+      run: df -hT
+
+    - name: Upload
+      uses: kittaakos/upload-artifact-as-is@master
+      if: steps.compile.outputs.status == 'success' && env.UPLOAD_DIR == 'true'
+      with:
+        path: /workdir/upload 
+
+    - name: Generate release tag
+      id: tag
+      if: env.UPLOAD_RELEASE == 'true' && steps.compile.outputs.status == 'success' && !cancelled()
+      run: |
+        kernel_ver=$(curl -s https://www.kernel.org/ | grep ' <a href="https://cdn.kernel.org/pub/linux/kernel/' | head -n 1 | awk -F '[>]' '{print $2}' | awk -F '[<]' '{print $1}')
+        echo "::set-output name=release_tag::Ubuntu_Kernel_${kernel_ver}_latest_bbr_$(date +"%Y.%m.%d-%H%M")"
+        touch release.txt
+        echo "::set-output name=status::success"
+
+    - name: Upload kernel to release
+      uses: softprops/action-gh-release@v1
+      if: steps.tag.outputs.status == 'success' && !cancelled()
+      env:
+        GITHUB_TOKEN: ${{ secrets.TOKEN }}
+      with:
+        tag_name: ${{ steps.tag.outputs.release_tag }}
+        body_path: release.txt
+        files: /workdir/upload/*
+        
+    - name: Delete workflow runs
+      uses: GitRML/delete-workflow-runs@main
+      with:
+        retain_days: 1
+        keep_minimum_runs: 3
+
+    - name: telegram_bot
+      run: |
+        if [[ "${SERVERCHAN_SCKEY}" == "true" ]]; then
+          curl -k --data chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data "text=我亲爱的✨主人✨：
+          您使用 kissyouhunter 的 bbr 仓库编译 ${{ github.event.inputs.set_number }} 内核顺利编译完成了！💐" "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage"
+        fi
