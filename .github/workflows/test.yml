@@ -64,7 +64,9 @@ jobs:
         df -hT $PWD
         set_number="${{ github.event.inputs.set_number }}"
         echo "KERNEL_NUMBER=${set_number}" >> $GITHUB_ENV
-        wget -N -O kernel.tar.xz ${KERNEL_URL}/linux-${KERNEL_NUMBER}.tar.xz
+        echo ${set_number}
+        echo ${KERNEL_NUMBER}
+        wget -N -O kernel.tar.xz ${KERNEL_URL}/linux-${set_number}.tar.xz
         tar -Jxf kernel.tar.xz -C /workdir && cd /workdir/linux-$kernel_ver
         echo "::set-output name=status::success"
 
