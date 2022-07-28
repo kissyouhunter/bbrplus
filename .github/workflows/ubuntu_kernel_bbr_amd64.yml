@@ -81,7 +81,7 @@ jobs:
         scripts/config --disable SECURITY_LOCKDOWN_LSM
         scripts/config --disable DEBUG_INFO
         scripts/config --disable MODULE_SIG
-        cp $GITHUB_WORKSPACE/amd64/lconfig-5.18.y-bbrplus .cofig -v
+        cp $GITHUB_WORKSPACE/amd64/config-5.18.y-bbrplus .cofig -v
         cp $GITHUB_WORKSPACE/convert_official_linux-5.18.x_src_to_bbrplus.patch convert_official_linux-5.18.x_src_to_bbrplus.patch -v
         echo -e "$(nproc) thread compile"
         sudo time make -j$(nproc) deb-pkg 2>&1 | tee build.log
