@@ -93,6 +93,7 @@ jobs:
         cp $GITHUB_WORKSPACE/amd64/config-5.18.y-bbrplus .cofig -v
         cp $GITHUB_WORKSPACE/convert_official_linux-5.18.x_src_to_bbrplus.patch convert_official_linux-5.18.x_src_to_bbrplus.patch -v
         echo -e "$(nproc) thread compile"
+        make defconfig
         sudo time make -j$(nproc) deb-pkg 2>&1 | tee build.log
         cd /workdir && mv *.deb /workdir/upload
         echo "::set-output name=status::success"
@@ -106,7 +107,6 @@ jobs:
       uses: kittaakos/upload-artifact-as-is@master
       if: steps.compile.outputs.status == 'success' && env.UPLOAD_DIR == 'true'
       with:
-        name: ${{ env.FILE_DATE }}
         path: /workdir/upload 
 
     - name: Generate release tag
