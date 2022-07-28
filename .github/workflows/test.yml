@@ -62,7 +62,7 @@ jobs:
       working-directory: /workdir
       run: |
         df -hT $PWD
-        wget -N -O kernel.tar.xz ${KERNEL_URL}/linux-${{ github.event.inputs.set_number }}.tar.xz
+        curl -Lo kernel.tar.xz ${KERNEL_URL}/linux-${{ github.event.inputs.set_number }}.tar.xz && sync
         tar -Jxf kernel.tar.xz -C /workdir && cd /workdir/linux-${{ github.event.inputs.set_number }}
         echo "::set-output name=status::success"
 
