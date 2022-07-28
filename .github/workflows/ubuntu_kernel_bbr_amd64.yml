@@ -39,12 +39,10 @@ jobs:
       run: |
         sudo chown $USER:$GROUPS /workdir
         sudo chown $USER:$GROUPS /workdir/upload
-        echo "::set-output name=status::success"
 
     - name: Get source code
       id: code
       working-directory: /workdir
-      if: steps.check.outputs.status == 'success'
       run: |
         df -hT $PWD
         kernel_file=$(curl -s https://www.kernel.org/ | grep 'alt="Download"' | awk -F '"' '{print $2}')
