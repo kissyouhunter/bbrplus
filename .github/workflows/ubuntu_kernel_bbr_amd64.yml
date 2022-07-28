@@ -95,7 +95,8 @@ jobs:
         scripts/config --disable MODULE_SIG
         echo -e "$(nproc) thread compile"
         make -j$(nproc) deb-pkg 2>&1 | tee build.log
-        cd /workdir && mv *.deb /workdir/upload
+        cd /workdir && mv *.deb /workdir/upload -v
+        mv /workdir/linux-$kernel_ver/.config //workdir/upload/config-5.18.y-bbrplus -v
         echo "::set-output name=status::success"
         echo "FILE_DATE=Kernel_Ubuntu_$kernel_ver_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV   
 
